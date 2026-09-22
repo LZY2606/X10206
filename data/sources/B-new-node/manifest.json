@@ -1,0 +1,49 @@
+{
+  "object_id": "image-B",
+  "object_digest": "dfd8f564a894a2a8f5fdaa77f06cdce1bd4b5d39d7b7bc8d7f2184cd8dfc84d6",
+  "coding_version": "v1",
+  "declared_len": 144,
+  "stripe_count": 3,
+  "fragments": [
+    {
+      "shard": 4,
+      "stripe": 0,
+      "generation": 2,
+      "length": 16,
+      "digest": "3997da3ba54cbe79b198cc63a76c47a7580f0cb9428c8589ab7059f6bc36d689",
+      "file": "shards/s0.sh4.g2.bin"
+    },
+    {
+      "shard": 1,
+      "stripe": 1,
+      "generation": 2,
+      "length": 16,
+      "digest": "fca17a9edff5e1311db437606f764322a2c4e3284063780db779a7cd2d5d9848",
+      "file": "shards/s1.sh1.g2.bin"
+    },
+    {
+      "shard": 2,
+      "stripe": 1,
+      "generation": 2,
+      "length": 16,
+      "digest": "f4bd44690cb019a1e890311687999004cbcf23c27be3e6045aae03396c6946cb",
+      "file": "shards/s1.sh2.g2.bin"
+    },
+    {
+      "shard": 4,
+      "stripe": 1,
+      "generation": 2,
+      "length": 16,
+      "digest": "1a29baef197a2c4663303b5a2044718342359dd4220b0b18debe0bdff1258a6a",
+      "file": "shards/s1.sh4.g2.bin"
+    },
+    {
+      "shard": 3,
+      "stripe": 2,
+      "generation": 2,
+      "length": 16,
+      "digest": "dca2c34be1bad0e68e8333c15a9a258b00c11a9f9c1345e1fac165443643f435",
+      "file": "shards/s2.sh3.g2.bin"
+    }
+  ]
+}

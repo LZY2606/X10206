@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>条带复原舱</title>
+<style>
+  :root {
+    --bg: #0f141b; --panel: #171e28; --panel2: #1d2735; --line: #2a3647;
+    --text: #e6edf3; --muted: #8fa3b8; --accent: #4ea1ff; --ok: #3fb96b;
+    --warn: #e0a13c; --bad: #e5534b; --amb: #b083f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  header {
+    padding: 18px 24px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, #141b25, #10161e);
+  }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: 2px; }
+  header .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .wrap { padding: 20px 24px; display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .panel h2 { font-size: 14px; margin: 0 0 12px; color: var(--accent); letter-spacing: 1px; }
+  button {
+    background: var(--accent); color: #06121f; border: 0; border-radius: 6px;
+    padding: 7px 14px; font-weight: 600; cursor: pointer; margin: 4px 6px 4px 0;
+  }
+  button.ghost { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .source {
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 8px;
+    background: var(--panel2);
+  }
+  .source .name { font-weight: 600; word-break: break-all; }
+  .source .path { color: var(--muted); font-size: 11px; word-break: break-all; margin: 3px 0 8px; }
+  .obj { margin-bottom: 22px; }
+  .obj-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .obj-head .id { font-size: 16px; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 8px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .stripe {
+    border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; background: var(--panel2);
+  }
+  .stripe-head { padding: 10px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; cursor: pointer; }
+  .stripe-body { padding: 0 12px 12px; display: none; }
+  .stripe.open .stripe-body { display: block; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700;
+  }
+  .b-committed, .b-trusted { background: rgba(63,185,107,.18); color: var(--ok); }
+  .b-ambiguous { background: rgba(176,131,240,.18); color: var(--amb); }
+  .b-unrecoverable, .b-digest_mismatch, .b-corrupt { background: rgba(229,83,75,.18); color: var(--bad); }
+  .b-degraded, .b-pending, .b-incomplete, .b-budget_limited { background: rgba(224,161,60,.18); color: var(--warn); }
+  .b-intact { background: rgba(63,185,107,.18); color: var(--ok); }
+  .b-length_mismatch, .b-stale { background: rgba(224,161,60,.18); color: var(--warn); }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); word-break: break-all; }
+  .ev { color: var(--bad); font-size: 11px; margin: 2px 0; }
+  .ok-note { color: var(--ok); font-size: 11px; }
+  .muted { color: var(--muted); }
+  .runline { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .toggle { font-size: 11px; color: var(--accent); margin-left: auto; }
+  .sol { border: 1px dashed var(--line); border-radius: 6px; padding: 8px; margin: 6px 0; }
+  .progress-bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .progress-bar > div { height: 100%; background: var(--accent); }
+  details summary { cursor: pointer; color: var(--muted); margin: 6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>条带复原舱</h1>
+    <div class="sub">离线对象碎片审阅 · 枚举式重建 · 参与块 / 排除证据 / 重算摘要全程留痕</div>
+  </div>
+  <div>
+    <button onclick="runRecovery({})">重算全部 stripe</button>
+    <button class="ghost" onclick="runRecovery({fault:'disk_write', after:1})">演练：磁盘写失败</button>
+    <button class="ghost" onclick="runRecovery({fault:'crash', after:1})">演练：中断续跑</button>
+    <button class="ghost" onclick="load()">刷新</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div>
+    <div class="panel">
+      <h2>接收来源（可人工隔离）</h2>
+      <div id="sources"></div>
+      <div class="runline" id="runline"></div>
+    </div>
+  </div>
+  <div id="objects"></div>
+</div>
+
+<script>
+let STATE = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const t = await r.text();
+    alert("请求失败：" + t);
+    throw new Error(t);
+  }
+  return r.json();
+}
+
+async function load() {
+  STATE = await api("/api/state");
+  render();
+}
+
+function badge(status) {
+  const cls = ["committed","trusted","ambiguous","unrecoverable","digest_mismatch",
+    "corrupt","degraded","pending","incomplete","budget_limited","intact","length_mismatch"]
+    .includes(status) ? "b-" + status : "b-pending";
+  return '<span class="badge ' + cls + '">' + status + "</span>";
+}
+
+function shortHex(s, n) { return s ? s.slice(0, n) + "…" : "—"; }
+
+async function toggleSource(id, isolated) {
+  await api(`/api/sources/${id}/isolate`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({isolated})
+  });
+  await load();
+}
+
+async function runRecovery(q) {
+  const qs = q.fault ? `?fault=${q.fault}&after=${q.after ?? 0}` : "";
+  const res = await api("/api/recover" + qs, {method: "POST"});
+  await load();
+  console.log("recovery", res);
+}
+
+async function doExport(id) {
+  try {
+    const res = await api(`/api/objects/${id}/export`, {method: "POST"});
+    alert("已导出到新目录：\n" + res.export_dir);
+  } catch (e) { /* alerted */ }
+}
+
+function render() {
+  const s = STATE;
+  document.getElementById("sources").innerHTML = s.sources.map(src => `
+    <div class="source">
+      <div class="name">${src.name} ${src.isolated ? badge("corrupt") : badge("intact")}</div>
+      <div class="path">${src.path}</div>
+      <button class="ghost" onclick="toggleSource(${src.id}, ${!src.isolated})">
+        ${src.isolated ? "取消隔离并重算" : "隔离来源并重算受影响 stripe"}
+      </button>
+    </div>`).join("");
+
+  if (s.last_run) {
+    const r = s.last_run;
+    const pct = r.stripes_total ? Math.round(100 * r.stripes_done / r.stripes_total) : 0;
+    document.getElementById("runline").innerHTML =
+      `最近批次 #${r.id}：${r.status}（${r.stripes_done}/${r.stripes_total}）` +
+      (r.fault_inject ? `，注入：${r.fault_inject}` : "") +
+      `<div class="progress-bar"><div style="width:${pct}%"></div></div>` +
+      `<div class="muted">搜索预算：${s.search_budget} 组合/stripe</div>`;
+  }
+
+  document.getElementById("objects").innerHTML = s.objects.map(obj => {
+    const stripes = obj.stripes.map(st => renderStripe(st)).join("");
+    return `<div class="obj">
+      <div class="panel">
+        <div class="obj-head">
+          <span class="id">📦 ${obj.object_id}</span>
+          ${badge(obj.status)}
+          <span class="muted">${obj.coding_version} · ${obj.stripe_count} stripe · 声明长度 ${obj.declared_len ?? "—"}</span>
+          <span class="mono">对象摘要 ${shortHex(obj.object_digest, 18)}</span>
+          <button onclick="doExport(${obj.id})" ${obj.status === "trusted" ? "" : "disabled"}>
+            导出（新目录 + 原子清单）
+          </button>
+        </div>
+
+        <details open><summary>shard 健康度（${obj.fragments.length} 块，保存原始字节与来源）</summary>
+          <table>
+            <tr><th>stripe</th><th>shard</th><th>gen</th><th>来源</th><th>长度(声明/实际)</th>
+                <th>声明摘要</th><th>重算摘要</th><th>健康度</th></tr>
+            ${obj.fragments.map(f => `
+              <tr>
+                <td>${f.stripe}</td><td>${f.shard}</td><td>${f.generation}</td>
+                <td>${f.source}</td>
+                <td class="${f.declared_length !== f.actual_length ? "ev" : ""}">${f.declared_length}/${f.actual_length}</td>
+                <td class="mono">${shortHex(f.digest_declared, 12)}</td>
+                <td class="mono">${shortHex(f.digest_actual, 12)}</td>
+                <td>${badge(f.health)}</td>
+              </tr>`).join("")}
+          </table>
+        </details>
+        ${stripes}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderStripe(st) {
+  const sols = st.stored_solutions;
+  const enumSols = st.enumerated_solutions;
+  return `<div class="stripe" id="stripe-${st.id}">
+    <div class="stripe-head" onclick="this.parentElement.classList.toggle('open')">
+      <strong>stripe ${st.stripe_idx}</strong>
+      ${badge(st.status)}
+      ${st.tier ? badge(st.tier) : ""}
+      <span class="muted">现有位置 ${st.present_positions} · 最新代位置 ${st.latest_positions} · 枚举 ${st.search_combos} 组</span>
+      <span class="mono">输出摘要 ${shortHex(st.output_digest, 16)}</span>
+      <span class="toggle">展开候选组合 / 证据 ▾</span>
+    </div>
+    <div class="stripe-body">
+      <div><b>候选（${st.candidate_count}）：</b></div>
+      <table>
+        <tr><th>frag#</th><th>shard</th><th>gen</th><th>长度</th><th>健康度</th><th>摘要</th></tr>
+        ${st.candidates.map(c => `
+          <tr><td>${c.fragment_id}</td><td>${c.shard}</td><td>${c.generation}</td>
+          <td>${c.length}</td><td>${badge(c.health)}</td>
+          <td class="mono">${shortHex(c.digest, 14)}</td></tr>`).join("")}
+      </table>
+
+      <div><b>可行重建（保留全部，差异由摘要体现）：</b></div>
+      ${enumSols.length === 0 ? '<div class="muted">无可行集合</div>' : enumSols.map((sol, i) => `
+        <div class="sol">
+          ${badge(sol.tier)} gen=${sol.generation}
+          <span class="mono">输出 ${shortHex(sol.output_digest, 24)}</span>
+          <div>参与 shard（frag#）：<b>[${sol.participant_ids.join(", ")}]</b></div>
+          <div class="${sol.excluded_ids.length ? "ev" : "ok-note"}">
+            排除的损坏证据 frag#：[${sol.excluded_ids.join(", ") || "无"}]
+          </div>
+          ${i > 0 ? '<div class="ev">与上一个可行解输出不同 —— 多答案，由对象摘要/人工裁决</div>' : ""}
+        </div>`).join("")}
+
+      ${st.evidence.length ? `<div><b>证据链：</b></div>` + st.evidence.map(e =>
+        `<div class="ev">· [${e.kind}]${e.fragment_id ? " frag#" + e.fragment_id : ""} ${e.detail}</div>`
+      ).join("") : ""}
+    </div>
+  </div>`;
+}
+
+load();
+</script>
+</body>
+</html>

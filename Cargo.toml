@@ -1,0 +1,17 @@
+[package]
+name = "stripe-capsule"
+version = "0.1.0"
+edition = "2021"
+description = "条带复原舱：离线对象碎片（Reed-Solomon）审阅、枚举式重建与可信导出"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+
+[profile.dev]
+opt-level = 1

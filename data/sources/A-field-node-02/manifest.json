@@ -1,0 +1,33 @@
+{
+  "object_id": "telemetry-A",
+  "object_digest": "88ba846deef01e424e2bbcb0175248cd30e47862cd31db9a20ad9f13e1ca3fb6",
+  "coding_version": "v1",
+  "declared_len": 96,
+  "stripe_count": 2,
+  "fragments": [
+    {
+      "shard": 0,
+      "stripe": 0,
+      "generation": 1,
+      "length": 16,
+      "digest": "6cdd0a93a0c0c6ad547df004e05e942da794b02e89fbf9d009458c8941f19447",
+      "file": "shards/s0.sh0.g1.bin"
+    },
+    {
+      "shard": 0,
+      "stripe": 0,
+      "generation": 1,
+      "length": 16,
+      "digest": "6be81d74e5ceaf26059b9cdb3db7d177378c029321d6345e515da6cdca5f29ee",
+      "file": "shards/s0.sh0.g1.bin"
+    },
+    {
+      "shard": 3,
+      "stripe": 1,
+      "generation": 1,
+      "length": 16,
+      "digest": "809ea3a1b6ab7b53dcfa03a76a21b884bdeb1f8f25a98fd4a8909946f93294fd",
+      "file": "shards/s1.sh3.g1.bin"
+    }
+  ]
+}

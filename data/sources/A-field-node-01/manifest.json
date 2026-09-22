@@ -1,0 +1,73 @@
+{
+  "object_id": "telemetry-A",
+  "object_digest": "88ba846deef01e424e2bbcb0175248cd30e47862cd31db9a20ad9f13e1ca3fb6",
+  "coding_version": "v1",
+  "declared_len": 96,
+  "stripe_count": 2,
+  "fragments": [
+    {
+      "shard": 1,
+      "stripe": 0,
+      "generation": 1,
+      "length": 16,
+      "digest": "91e85b32e589cfad1bd034ff9d83e302baf21aca3b27c9b720be5c7f7fdb1529",
+      "file": "shards/s0.sh1.g1.bin"
+    },
+    {
+      "shard": 2,
+      "stripe": 0,
+      "generation": 1,
+      "length": 16,
+      "digest": "5b7f03202cedcfe3efbb2b00f742bf756dad8c26f0d31eab1330a5cc6900d19a",
+      "file": "shards/s0.sh2.g1.bin"
+    },
+    {
+      "shard": 3,
+      "stripe": 0,
+      "generation": 1,
+      "length": 16,
+      "digest": "6ad5ee90746c928faba6509110a8238596d1609bad0ed014b303803c8f593fe1",
+      "file": "shards/s0.sh3.g1.bin"
+    },
+    {
+      "shard": 4,
+      "stripe": 0,
+      "generation": 1,
+      "length": 16,
+      "digest": "9423658100b6d87f79dd39681c8e63ad72d18dfdf461f3c4090591f76a6d1e4a",
+      "file": "shards/s0.sh4.g1.bin"
+    },
+    {
+      "shard": 0,
+      "stripe": 1,
+      "generation": 1,
+      "length": 16,
+      "digest": "b2f14c1ff0944aafe8815be1bfde038a93d3d4d846ca784b2ebad601ef6beb11",
+      "file": "shards/s1.sh0.g1.bin"
+    },
+    {
+      "shard": 1,
+      "stripe": 1,
+      "generation": 1,
+      "length": 16,
+      "digest": "4b64adcd4c9a66796407ac69032a38ea8c367aabdc91850b13fcf65ad64f7493",
+      "file": "shards/s1.sh1.g1.bin"
+    },
+    {
+      "shard": 2,
+      "stripe": 1,
+      "generation": 1,
+      "length": 16,
+      "digest": "3cbfe55fb733fde7d65a23a46de0e9c848665cc376045518b5376c563d497927",
+      "file": "shards/s1.sh2.g1.bin"
+    },
+    {
+      "shard": 4,
+      "stripe": 1,
+      "generation": 1,
+      "length": 16,
+      "digest": "51e851e3a72cc17160e41af8afe98aefb0409d32ee34065370497fff86abe3b5",
+      "file": "shards/s1.sh4.g1.bin"
+    }
+  ]
+}

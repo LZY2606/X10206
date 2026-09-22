@@ -1,0 +1,33 @@
+{
+  "object_id": "puzzle-C",
+  "object_digest": null,
+  "coding_version": "v2",
+  "declared_len": null,
+  "stripe_count": 1,
+  "fragments": [
+    {
+      "shard": 0,
+      "stripe": 0,
+      "generation": 1,
+      "length": 12,
+      "digest": "22f77b8b593ed9ddc5a53848df2a4ec1fd9650f58fb5ca62c5ce6a3c06ffd45a",
+      "file": "shards/s0.sh0.g1.bin"
+    },
+    {
+      "shard": 1,
+      "stripe": 0,
+      "generation": 1,
+      "length": 12,
+      "digest": "b976dfe75702b27a266f204c3929961d64c83afb5d1d88dfe3a6e83d22c27f95",
+      "file": "shards/s0.sh1.g1.bin"
+    },
+    {
+      "shard": 2,
+      "stripe": 0,
+      "generation": 1,
+      "length": 12,
+      "digest": "d0cf148b4ff97c80ab865b50ab960543f436460a361ceb56b98906fcf853b22a",
+      "file": "shards/s0.sh2.g1.bin"
+    }
+  ]
+}
