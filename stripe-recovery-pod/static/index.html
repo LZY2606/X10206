@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>条带复原舱</title>
+<style>
+:root{
+  --bg:#0f141b; --panel:#171e28; --panel2:#1d2632; --line:#2a3646;
+  --txt:#dce6f2; --dim:#8ea0b6; --accent:#4cc2ff; --ok:#3ddc84;
+  --warn:#ffc857; --bad:#ff6b6b; --amb:#c59bff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.55 -apple-system,"PingFang SC","Microsoft Yahei",sans-serif}
+header{padding:18px 26px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0;letter-spacing:2px}
+header .sub{color:var(--dim);font-size:12px}
+main{padding:20px 26px;max-width:1280px;margin:0 auto}
+button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.danger:hover{border-color:var(--bad);color:var(--bad)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:16px 0;overflow:hidden}
+.card > .hd{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.card > .bd{padding:14px 16px}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;border:1px solid var(--line);color:var(--dim)}
+.tag.ok{color:var(--ok);border-color:#245a3b;background:#12241a}
+.tag.bad{color:var(--bad);border-color:#5a2424;background:#2a1414}
+.tag.warn{color:var(--warn);border-color:#5a4520;background:#27200f}
+.tag.amb{color:var(--amb);border-color:#432e63;background:#1d1530}
+.tag.run{color:var(--accent);border-color:#1f4a63;background:#10212e}
+.bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;width:220px}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,#2b8fd9,#3ddc84)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--dim);font-weight:600}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.dim{color:var(--dim)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.shard{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px}
+.shard .ix{font-weight:700}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)} .dot.warn{background:var(--warn)} .dot.dim{background:var(--dim)} .dot.amb{background:var(--amb)}
+details{margin-top:8px}
+summary{cursor:pointer;color:var(--accent);font-size:12.5px}
+.sol{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;margin:8px 0;background:var(--panel2)}
+.srcrow{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+code{background:var(--panel2);padding:1px 5px;border-radius:4px}
+#toast{position:fixed;right:20px;bottom:20px;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;max-width:420px;display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>条带复原舱</h1>
+  <span class="sub">离线对象碎片审阅 · GF(2⁸) Cauchy Reed–Solomon · 候选枚举与按条带原子提交</span>
+  <span style="flex:1"></span>
+  <button onclick="loadHealth()">刷新健康度</button>
+  <button onclick="rescan()">重新扫描 incoming/</button>
+</header>
+<main>
+  <section class="card">
+    <div class="hd"><strong>接收来源</strong><span class="dim" id="srcHint"></span></div>
+    <div class="bd" id="sources"></div>
+  </section>
+  <div id="objects"></div>
+</main>
+<div id="toast"></div>
+<script>
+const $=(s,el=document)=>el.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function toast(msg,bad){const t=$("#toast");t.textContent=msg;t.style.display="block";t.style.borderColor=bad?"var(--bad)":"var(--accent)";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",5000);}
+async function api(url,opt){
+  try{
+    const r=await fetch(url,Object.assign({headers:{"Content-Type":"application/json"}},opt));
+    const txt=await r.text();
+    let body; try{body=JSON.parse(txt)}catch{body=txt}
+    if(!r.ok){toast("请求失败: "+(body&&body.error?body.error:txt),true);return null;}
+    return body;
+  }catch(e){toast("网络错误: "+e,true);return null;}
+}
+async function rescan(){const b=await api("/api/import",{method:"POST"});if(b){toast("扫描完成");loadHealth();}}
+async function recover(id){toast("正在枚举候选并提交条带…");const b=await api(`/api/objects/${encodeURIComponent(id)}/recover`,{method:"POST"});if(b){toast("恢复流程结束");loadHealth();}}
+async function resetObj(id){if(!confirm("清空该对象全部恢复状态并重算？"))return;const b=await api(`/api/objects/${encodeURIComponent(id)}/reset`,{method:"POST"});if(b){toast("已重置");recover(id);}}
+async function doExport(id){toast("正在写入新导出目录并原子切换清单…");const b=await api(`/api/objects/${encodeURIComponent(id)}/export`,{method:"POST"});if(b){toast("导出完成: "+(b.result&&b.result.export_dir?b.result.export_dir:""));loadHealth();}}
+async function isolate(name){if(!confirm(`隔离来源 ${name}？受影响条带将立即重算。`))return;const b=await api(`/api/sources/${encodeURIComponent(name)}/isolate`,{method:"POST"});if(b){toast("来源已隔离，受影响条带已重算");loadHealth();}}
+async function restore(name){const b=await api(`/api/sources/${encodeURIComponent(name)}/restore`,{method:"POST"});if(b){toast("来源已恢复，可手动重算对象");loadHealth();}}
+
+function statusTag(st){
+  const map={recovered:["ok","已恢复且摘要可信"],recovered_ambiguous:["amb","恢复但存在多个可行装配"],
+    unrecoverable:["bad","不可恢复"],untrusted:["warn","可重建但对象摘要不符"],
+    running:["run","运行中"],interrupted:["warn","中断"],stale:["warn","状态过期需重算"],
+    new:["dim","未运行"],committed:["ok","已提交"],pending:["dim","待处理"]};
+  const [cls,label]=map[st]||["dim",st];
+  return `<span class="tag ${cls}">${esc(label)}</span>`;
+}
+function renderSources(data){
+  $("#srcHint").textContent=`${data.sources.length} 个来源`;
+  $("#sources").innerHTML=data.sources.map(s=>`
+    <div class="srcrow">
+      <span class="dot ${s.isolated?'bad':'ok'}"></span>
+      <strong>${esc(s.name)}</strong>
+      <span class="tag">${s.fragments} 块</span>
+      ${s.isolated?`<span class="tag bad">已人工隔离</span><span class="dim">${esc(s.note||"")}</span>
+        <button onclick="restore('${esc(s.name)}')">恢复来源</button>`
+        :`<span class="dim">${esc(s.note||"在线")}</span>
+        <button class="danger" onclick="isolate('${esc(s.name)}')">隔离并重算</button>`}
+    </div>`).join("") || `<span class="dim">尚无来源目录（放入 incoming/ 后点击“重新扫描”）</span>`;
+}
+function shardCell(h){
+  const cls=h.clean>0?"ok":(h.corrupt>0||h.wrong_length>0?"bad":"dim");
+  const bits=[];
+  if(h.clean)bits.push(`<span class="dot ok"></span>${h.clean} 干净`);
+  if(h.corrupt)bits.push(`<span class="dot bad"></span>${h.corrupt} 损坏`);
+  if(h.wrong_length)bits.push(`<span class="dot bad"></span>${h.wrong_length} 长度不符`);
+  if(h.unverified)bits.push(`<span class="dot warn"></span>${h.unverified} 无摘要`);
+  return `<div class="shard"><div class="ix"><span class="dot ${cls}"></span>i${h.index}</div>
+    <div class="dim">候选 ${h.candidates} · 世代 ${h.gens.join("/")||"-"}</div>
+    <div>${bits.join(" ")||'<span class="dim">无候选</span>'}</div>
+    <div class="dim" title="${esc(h.sources.join(", "))}">${esc(h.sources.slice(0,3).join(", "))}${h.sources.length>3?"…":""}</div>
+  </div>`;
+}
+function renderSolutions(stripe){
+  if(!stripe.solutions.length)return "";
+  return stripe.solutions.map(sol=>`
+    <div class="sol">
+      <div>${sol.chosen?'<span class="tag ok">已选方案</span>':""}
+        <strong>可行重建 #${sol.rank}</strong>
+        <span class="tag">世代 ${sol.generation}</span>
+        <span class="dim mono">重建摘要 ${esc(sol.reconstructed_digest.slice(0,16))}…</span>
+      </div>
+      <details><summary>参与计算的 shard（${sol.combo.length}）与被排除证据（${sol.excluded.length}）</summary>
+        <table>
+          <tr><th>参与 shard</th><th>来源</th><th>世代</th><th>内容摘要</th></tr>
+          ${sol.combo.map(c=>`<tr><td class="mono">i${c.shard_index} (frag#${c.fragment_id})</td>
+            <td>${esc(c.source)}</td><td>${c.generation}</td>
+            <td class="mono">${esc(c.content_digest.slice(0,16))}…</td></tr>`).join("")}
+        </table>
+        ${sol.excluded.length?`<table style="margin-top:6px">
+          <tr><th>排除碎片</th><th>位置</th><th>来源</th><th>原因</th></tr>
+          ${sol.excluded.map(e=>`<tr><td class="mono">frag#${e.fragment_id}</td>
+            <td class="mono">s${e.shard_index} i${e.shard_index}</td>
+            <td>${esc(e.source)}</td>
+            <td>${e.reasons.map(r=>`<span class="tag warn">${esc(r)}</span>`).join(" ")}</td></tr>`).join("")}
+        </table>`:'<div class="dim" style="margin-top:6px">该方案没有被排除的碎片。</div>'}
+      </details>
+    </div>`).join("");
+}
+function renderObject(o){
+  const shardsTotal=o.stripes.reduce((a,s)=>a+s.shard_health.length,0);
+  return `<section class="card">
+    <div class="hd">
+      <strong style="font-size:16px">${esc(o.id)}</strong>
+      ${statusTag(o.run_status)}
+      <span class="tag">${esc(o.scheme)} v${o.version}</span>
+      <span class="tag">k=${o.k} / n=${o.n}</span>
+      <span class="tag">${o.stripe_count} 条带</span>
+      <span class="tag">块长 ${o.shard_len} B</span>
+      <span class="tag">对象 ${o.data_len} B</span>
+      <span class="tag ${o.evidence_count?'warn':'ok'}">证据 ${o.evidence_count}</span>
+      <span style="flex:1"></span>
+      <button onclick="recover('${esc(o.id)}')">（重新）恢复</button>
+      <button onclick="resetObj('${esc(o.id)}')">清空重算</button>
+      <button onclick="doExport('${esc(o.id)}')">原子导出</button>
+    </div>
+    <div class="bd">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <div class="bar"><i style="width:${o.progress_pct}%"></i></div>
+        <strong>${o.progress_pct}%</strong>
+        <span class="dim">${esc(o.run_detail||"尚未运行恢复")}</span>
+      </div>
+      <div class="dim mono" style="margin-bottom:10px">manifest 对象摘要: ${esc(o.manifest_digest)}
+        ${o.export_dir?` · 已导出到 <code>${esc(o.export_dir)}</code>`:""}</div>
+      ${o.stripes.map(st=>`
+        <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;background:var(--panel2)">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <strong>条带 s${st.stripe}</strong>
+            ${statusTag(st.status)}
+            ${st.reused?'<span class="tag ok">中断后续跑复用</span>':""}
+            ${st.generation!=null?`<span class="tag">世代 ${st.generation}</span>`:""}
+            <span class="dim">${esc(st.detail)}</span>
+          </div>
+          <div class="grid" style="margin-top:8px">${st.shard_health.map(shardCell).join("")}</div>
+          ${renderSolutions(st)}
+        </div>`).join("")}
+    </div>
+  </section>`;
+}
+async function loadHealth(){
+  const data=await api("/health");
+  if(!data)return;
+  renderSources(data);
+  $("#objects").innerHTML=data.objects.map(renderObject).join("") ||
+    `<section class="card"><div class="bd dim">尚未导入对象。把交付目录放进 <code>incoming/</code> 后点击“重新扫描 incoming/”。</div></section>`;
+}
+loadHealth();
+setInterval(loadHealth,8000);
+</script>
+</body>
+</html>
