@@ -1,0 +1,22 @@
+[package]
+name = "stripe_recovery_pod"
+version = "0.1.0"
+edition = "2021"
+description = "条带复原舱 - offline object fragment review and stripe recovery"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "fs", "io-util", "signal", "time"] }
+axum = { version = "0.8", features = [] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+anyhow = "1"
+thiserror = "2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
