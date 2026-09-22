@@ -1,0 +1,21 @@
+[package]
+name = "stripe-recovery-pod"
+version = "0.1.0"
+edition = "2021"
+description = "条带复原舱：离线对象碎片审阅与版本化纠删码重建"
+
+[dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }
+tower = { version = "0.5", features = ["util"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[[bin]]
+name = "stripe-recovery-pod"
+path = "src/main.rs"

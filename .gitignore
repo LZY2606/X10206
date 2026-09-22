@@ -34,3 +34,6 @@ coverage/
 .vite/
 .turbo/
 *.tsbuildinfo
+
+# --- 条带复原舱运行时数据 ---
+/data/
