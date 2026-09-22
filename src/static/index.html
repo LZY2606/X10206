@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>条带复原舱</title>
+<style>
+  :root { --bg:#0f1420; --panel:#171e2e; --line:#27314a; --txt:#e7ecf5; --muted:#93a0b8;
+          --ok:#3ddc97; --warn:#f5b642; --bad:#ff6b6b; --accent:#5aa7ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:16px; }
+  header h1 { font-size:20px; margin:0; }
+  header .sub { color:var(--muted); font-size:13px; }
+  main { padding:20px 24px; max-width:1200px; margin:0 auto; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  button, select, input { background:var(--panel); color:var(--txt); border:1px solid var(--line);
+          border-radius:8px; padding:8px 12px; font-size:13px; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); color:#06101f; border-color:var(--accent); font-weight:600; }
+  button:hover { filter:brightness(1.1); }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin:14px 0; }
+  .panel h2 { margin:0 0 10px; font-size:15px; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { text-align:left; padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:600; }
+  .ok { background:rgba(61,220,151,.15); color:var(--ok); }
+  .warn { background:rgba(245,182,66,.15); color:var(--warn); }
+  .bad { background:rgba(255,107,107,.15); color:var(--bad); }
+  .muted { color:var(--muted); }
+  .mono { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; word-break:break-all; }
+  details { margin:8px 0; border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  details summary { cursor:pointer; font-weight:600; font-size:13px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:10px; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:10px; background:#121a2a; }
+  .chip { border:1px solid var(--line); border-radius:999px; padding:3px 10px; font-size:12px; cursor:pointer; }
+  .chip.on { background:var(--bad); border-color:var(--bad); color:#1b0707; }
+  .toast { position:fixed; right:18px; bottom:18px; max-width:420px; background:#10182a;
+           border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:13px;
+           white-space:pre-wrap; display:none; }
+  code { color:#bfe0ff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>条带复原舱</h1>
+  <span class="sub">离线对象碎片审阅 · 版本化 RS 重建 · 证据与候选枚举</span>
+</header>
+<main>
+  <div class="row" style="justify-content:space-between">
+    <div class="row">
+      <label class="muted">对象
+        <select id="objects" style="margin-left:8px"></select>
+      </label>
+      <button class="primary" id="btnRecover">重新计算恢复</button>
+      <button id="btnExport">导出首选结果</button>
+    </div>
+    <div class="row">
+      <input id="importDir" placeholder="bundle 目录（可选）" style="width:220px" />
+      <button id="btnImport">导入</button>
+      <button id="btnDemo">载入演示</button>
+    </div>
+  </div>
+  <div id="root"></div>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+function toast(msg, isErr) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.borderColor = isErr ? 'var(--bad)' : 'var(--line)';
+  t.style.display = 'block';
+  clearTimeout(window.__t);
+  window.__t = setTimeout(() => (t.style.display = 'none'), 6000);
+}
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const short = (s, n=14) => s ? (s.length > n ? s.slice(0,n)+'…' : s) : '—';
+
+function healthPill(h) {
+  if (h === 'healthy') return '<span class="pill ok">健康</span>';
+  if (h === 'recoverable') return '<span class="pill warn">可恢复</span>';
+  return '<span class="pill bad">低于下限</span>';
+}
+function digestPill(d) {
+  if (d === 'verified') return '<span class="pill ok">摘要一致</span>';
+  if (d === 'digest_mismatch') return '<span class="pill bad">摘要不符</span>';
+  return '<span class="pill warn">无摘要</span>';
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || ('HTTP ' + res.status));
+  return body;
+}
+
+async function loadObjects(selectId) {
+  const data = await api('/api/objects');
+  const sel = $('#objects');
+  sel.innerHTML = '';
+  for (const o of data.objects) {
+    const opt = document.createElement('option');
+    opt.value = o.object_id;
+    opt.textContent = `${o.object_id} (gf=${o.field}, ${o.k}+${o.m}, ${o.stripe_count} stripe)`;
+    sel.appendChild(opt);
+  }
+  return data.objects;
+}
+
+let currentDetail = null;
+
+async function loadDetail() {
+  const id = $('#objects').value;
+  if (!id) { $('#root').innerHTML = '<p class="muted">暂无对象，点击"载入演示"。</p>'; return; }
+  currentDetail = await api('/api/objects/' + encodeURIComponent(id));
+  render(currentDetail);
+}
+
+function render(d) {
+  const m = d.manifest;
+  const isolated = new Set(d.isolated_sources);
+  let html = '';
+
+  // 来源隔离
+  html += `<div class="panel"><h2>来源隔离</h2><div class="row">`;
+  for (const s of d.sources) {
+    const on = isolated.has(s) ? ' on' : '';
+    html += `<span class="chip${on}" data-src="${esc(s)}">${esc(s)}${isolated.has(s)?' · 已隔离':''}</span>`;
+  }
+  html += `</div><p class="muted" style="margin-bottom:0">点击切换隔离；隔离后自动重算受影响 stripe。</p></div>`;
+
+  // 对象级结果
+  html += `<div class="panel"><h2>恢复结果（${d.outcomes.length} 个可行对象答案）</h2>`;
+  if (d.outcomes.length === 0) html += '<p class="muted">尚未恢复。</p>';
+  html += '<table><tr><th>#</th><th>outcome</th><th>对象摘要</th><th>匹配 manifest</th><th>generation</th><th>混杂</th><th>差异 stripe</th><th></th></tr>';
+  d.outcomes.forEach((o, i) => {
+    const match = o.digest_matches_manifest == null ? '—（manifest 无摘要）'
+      : (o.digest_matches_manifest ? '<span class="pill ok">匹配</span>' : '<span class="pill bad">不匹配</span>');
+    html += `<tr><td>${i===0?'首选':'#'+i}</td><td class="mono">${short(o.outcome_id,18)}</td>
+      <td class="mono">${short(o.object_digest,18)}</td><td>${match}</td>
+      <td>${(o.generations||[]).join(',')}</td>
+      <td>${o.mixed_generation?'<span class="pill warn">是</span>':'否'}</td>
+      <td>${(o.diff_stripes_vs_first||[]).length ? esc((o.diff_stripes_vs_first||[]).join(',')) : '—'}</td>
+      <td>${i===0?'<button data-export="'+esc(o.outcome_id)+'">导出</button>':''}</td></tr>`;
+  });
+  html += '</table></div>';
+
+  // shard 健康总览（碎片表）
+  html += `<div class="panel"><h2>碎片 / shard 健康度（${d.fragments.length} 块原始碎片）</h2>`;
+  html += '<table><tr><th>stripe</th><th>shard</th><th>gen</th><th>来源</th><th>长度</th><th>摘要</th><th>重算摘要</th></tr>';
+  for (const f of d.fragments) {
+    const lenCls = f.length_ok ? 'ok' : 'bad';
+    html += `<tr><td>${f.stripe}</td><td>${f.shard}</td><td>${f.generation}</td>
+      <td>${esc(f.source)}${f.isolated?' <span class="pill bad">隔离</span>':''}</td>
+      <td><span class="pill ${lenCls}">${f.length}/${f.expected_length}</span></td>
+      <td>${digestPill(f.digest_state)}</td>
+      <td class="mono">${short(f.recomputed_digest,18)}</td></tr>`;
+  }
+  html += '</table></div>';
+
+  // 每 stripe 候选组合
+  for (const a of d.stripes) {
+    html += `<div class="panel"><h2>stripe ${a.stripe} ${healthPill(a.health)}
+      <span class="muted" style="font-weight:400"> 可行解 ${a.solutions.length} 个 · 枚举预算 ${a.budget}</span></h2>`;
+    if (a.solutions.length === 0) {
+      html += '<p class="muted">无可行组合。</p>';
+    } else {
+      html += '<div class="grid">';
+      a.solutions.forEach((s, i) => {
+        html += `<div class="card"><div><b>${i===0?'首选解':'解 '+(i+1)}</b>
+          <span class="mono muted"> ${short(s.solution_id,10)}</span>
+          ${s.mixed_generation?'<span class="pill warn">generation 混杂</span>':''}
+          ${s.equivalent_combos>1?`<span class="pill ok">等价格式×${s.equivalent_combos}</span>`:''}
+          ${s.truncated_by_budget?'<span class="pill warn">触预算</span>':''}</div>
+          <p class="muted" style="margin:6px 0">参与计算 shard：${s.participants.map(p=>p.shard).sort((x,y)=>x-y).join(', ')}；generation: ${s.generations.join(',')}</p>
+          <details><summary>参与 shard 与重算摘要（${s.participants.length}）</summary><table>
+          <tr><th>shard</th><th>来源</th><th>gen</th><th>摘要</th><th>输出摘要</th></tr>`;
+        s.participants.forEach((p, pi) => {
+          html += `<tr><td>${p.shard}</td><td>${esc(p.source)}</td><td>${p.generation}</td>
+            <td>${digestPill(p.digest_state)}</td>
+            <td class="mono">${short(s.recomputed_shard_digests[p.shard],14)}</td></tr>`;
+        });
+        html += '</table></details>';
+        const badEv = s.excluded.filter(e => e.reason !== 'generation_mixed');
+        if (badEv.length) {
+          html += `<details><summary>被排除的损坏证据（${badEv.length}）</summary><table>
+            <tr><th>碎片</th><th>shard</th><th>原因</th><th>说明</th></tr>`;
+          for (const e of badEv) html += `<tr><td class="mono">${short(e.fragment_id,10)}</td><td>${e.shard===4294967295?'—':e.shard}</td><td>${esc(e.reason)}</td><td>${esc(e.detail)}</td></tr>`;
+          html += '</table></details>';
+        }
+        const mixEv = s.excluded.filter(e => e.reason === 'generation_mixed');
+        if (mixEv.length) html += `<p class="muted">generation 混杂证据 ${mixEv.length} 条（部分写）。</p>`;
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    if (a.global_excluded.length) {
+      html += `<details><summary>stripe 级排除证据（${a.global_excluded.length}）</summary><table>
+        <tr><th>碎片</th><th>shard</th><th>gen</th><th>来源</th><th>原因</th><th>说明</th></tr>`;
+      for (const e of a.global_excluded)
+        html += `<tr><td class="mono">${short(e.fragment_id,10)}</td><td>${e.shard}</td><td>${e.generation}</td>
+          <td>${esc(e.source)}</td><td>${esc(e.reason)}</td><td>${esc(e.detail)}</td></tr>`;
+      html += '</table></details>';
+    }
+    html += '</div>';
+  }
+
+  if (d.exports.length) {
+    html += '<div class="panel"><h2>导出记录</h2><table><tr><th>目录</th><th>outcome</th><th>状态</th></tr>';
+    for (const e of d.exports) html += `<tr><td class="mono">${esc(e.rel_dir)}</td><td class="mono">${short(e.outcome_id,14)}</td><td>${esc(e.status)}</td></tr>`;
+    html += '</table></div>';
+  }
+
+  $('#root').innerHTML = html;
+  document.querySelectorAll('.chip').forEach((el) =>
+    el.addEventListener('click', async () => {
+      const src = el.dataset.src;
+      const set = new Set(d.isolated_sources);
+      set.has(src) ? set.delete(src) : set.add(src);
+      try {
+        const body = await api('/api/objects/' + encodeURIComponent(d.manifest.object_id) + '/isolate',
+          { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sources: [...set] }) });
+        currentDetail = body; render(body);
+        toast(`来源「${src}」${set.has(src)?'已隔离':'已取消隔离'}，stripe 已重算`);
+      } catch (e) { toast(e.message, true); }
+    }));
+  document.querySelectorAll('[data-export]').forEach((b) =>
+    b.addEventListener('click', () => doExport(b.dataset.export)));
+}
+async function doExport(outcomeId) {
+  const id = $('#objects').value;
+  try {
+    const r = await api('/api/objects/' + encodeURIComponent(id) + '/export', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ outcome_id: outcomeId })
+    });
+    toast('已导出到新目录：\n' + r.dir + '\n（manifest.json 原子切换，原始碎片未改动）');
+    await loadDetail();
+  } catch (e) { toast(e.message, true); }
+}
+
+$('#btnRecover').addEventListener('click', async () => {
+  const id = $('#objects').value;
+  if (!id) return;
+  toast('恢复中（按 stripe 提交）…');
+  try {
+    const r = await api('/api/objects/' + encodeURIComponent(id) + '/recover', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ reuse: true })
+    });
+    currentDetail = r.detail; render(r.detail);
+    toast(`恢复完成：stripe ${r.progress.stripes_total}，复用 ${r.progress.stripes_reused}，重建 ${r.progress.stripes_rebuilt}，可行答案 ${r.progress.outcomes}`);
+  } catch (e) { toast(e.message, true); }
+});
+$('#btnExport').addEventListener('click', () => doExport(null));
+$('#btnImport').addEventListener('click', async () => {
+  const dir = $('#importDir').value.trim();
+  if (!dir) return toast('请填写 bundle 目录', true);
+  try {
+    const r = await api('/api/import', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ dir }) });
+    await loadObjects(); $('#objects').value = r.object_id; await loadDetail();
+    toast(`导入 ${r.object_id}：${r.fragment_count} 块；警告 ${r.warnings.length} 条`);
+  } catch (e) { toast(e.message, true); }
+});
+$('#btnDemo').addEventListener('click', async () => {
+  try {
+    const r = await api('/api/demo', { method:'POST' });
+    await loadObjects(); $('#objects').value = 'demo-object'; await loadDetail();
+    toast('演示对象已载入：' + r.object_id);
+  } catch (e) { toast(e.message, true); }
+});
+$('#objects').addEventListener('change', loadDetail);
+
+(async function init() {
+  try {
+    await loadObjects();
+    await loadDetail();
+  } catch (e) { toast(e.message, true); }
+})();
+</script>
+</body>
+</html>
