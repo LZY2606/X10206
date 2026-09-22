@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>条带复原舱</title>
+  <style>
+    :root { color-scheme: light; --ink:#17202a; --muted:#667085; --line:#d9e0ea; --panel:#f8fafc; --blue:#1d5fd1; --red:#b42318; --green:#067647; --amber:#b54708; }
+    body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:#eef2f7; }
+    header { padding:28px 32px 18px; background:#102a43; color:white; }
+    h1 { margin:0 0 6px; font-size:28px; }
+    header p { margin:0; color:#c7d7e8; }
+    main { padding:22px 32px 40px; }
+    .grid { display:grid; grid-template-columns:minmax(380px,1.1fr) minmax(480px,1fr); gap:18px; }
+    section { background:white; border:1px solid var(--line); border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(16,42,67,.06); }
+    h2 { margin:0 0 12px; font-size:17px; }
+    h3 { margin:16px 0 8px; font-size:15px; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:8px; border-bottom:1px solid #edf1f5; vertical-align:top; text-align:left; }
+    th { color:#44546a; font-weight:650; background:#f7f9fc; position:sticky; top:0; }
+    .scroll { max-height:360px; overflow:auto; border:1px solid #e6ebf2; border-radius:8px; }
+    button { border:0; border-radius:8px; padding:8px 12px; background:var(--blue); color:white; cursor:pointer; font-weight:600; }
+    button.secondary { background:#344054; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:12px; font-weight:650; }
+    .healthy,.committed { background:#dcfae6; color:var(--green); }
+    .corrupt,.excluded,.ambiguous_outputs,.budget_exhausted,.corrupt_or_insufficient { background:#fee4e2; color:var(--red); }
+    .generation_mixed_eligible,.partial,.below_threshold { background:#fef0c7; color:var(--amber); }
+    .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; word-break:break-all; }
+    .muted { color:var(--muted); }
+    .evidence { white-space:pre-wrap; max-width:460px; max-height:130px; overflow:auto; background:#f8fafc; border:1px solid #e6ebf2; border-radius:6px; padding:6px; }
+    label { display:inline-flex; gap:5px; align-items:center; margin:2px 6px 2px 0; }
+    .wide { grid-column:1 / -1; }
+    @media(max-width:980px){ .grid{grid-template-columns:1fr} main,header{padding-left:14px;padding-right:14px} }
+  </style>
+</head>
+<body>
+<header>
+  <h1>条带复原舱</h1>
+  <p>对象碎片版本化审阅、确定性枚举、按 stripe 原子提交与可验证导出</p>
+</header>
+<main>
+  <div class="actions">
+    <button onclick="load()">刷新</button>
+    <button class="secondary" onclick="post('/api/ingest', {})">重新导入 inbox</button>
+  </div>
+  <div class="grid">
+    <section>
+      <h2>对象</h2>
+      <div class="scroll"><table id="objects"><thead><tr><th>对象 / generation</th><th>编码</th><th>进度</th><th>健康</th><th></th></tr></thead><tbody></tbody></table></div>
+    </section>
+    <section id="detailPanel">
+      <h2>审阅对象</h2>
+      <p class="muted">选择一个对象查看 stripe、shard、候选组合和证据。</p>
+    </section>
+    <section class="wide">
+      <h2>可行重建与排除证据</h2>
+      <div class="scroll"><table id="reconstructions"><thead><tr><th>Run</th><th>Stripe</th><th>组合</th><th>参与 shard</th><th>排除的损坏证据</th><th>重新计算摘要</th></tr></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+</main>
+<script>
+let stateData = null;
+let selected = null;
+const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+function pill(value){ return `<span class="pill ${esc(value)}">${esc(value)}</span>`; }
+async function load(){
+  const response = await fetch('/api/state');
+  stateData = await response.json();
+  renderObjects();
+  if(!selected && stateData.objects.length) selected = stateData.objects[0].id;
+  renderDetail();
+}
+function renderObjects(){
+  document.querySelector('#objects tbody').innerHTML = stateData.objects.map(object => `
+    <tr>
+      <td><strong>${esc(object.object_id)}</strong><br><span class="muted">g${object.generation}<br>${esc(object.object_sha256.slice(0,16))}</span></td>
+      <td>k=${object.data_shards}, m=${object.parity_shards}<br>stripe=${object.stripe_size}B</td>
+      <td>${object.committed_stripes}/${object.stripe_count}<br>${pill(object.status)}</td>
+      <td>${object.healthy_fragments} healthy<br>${object.excluded_fragments} excluded</td>
+      <td><button onclick="selectObject(${object.id})">审阅</button></td>
+    </tr>`).join('');
+}
+function selectObject(id){ selected=id; renderDetail(); }
+function currentObject(){ return stateData.objects.find(o=>o.id===selected); }
+function renderDetail(){
+  const object = currentObject();
+  const panel = document.querySelector('#detailPanel');
+  if(!object){ panel.innerHTML = '<h2>审阅对象</h2><p class="muted">暂无对象。</p>'; return; }
+  const sourceSet = new Set();
+  stateData.selected.fragments.forEach(f => sourceSet.add(f.received_from));
+  const sources = [...sourceSet].sort();
+  panel.innerHTML = `<h2>${esc(object.object_id)} <span class="muted">g${object.generation}</span></h2>
+    <div class="actions">
+      <button onclick="recover(false)">重算受影响 stripe</button>
+      <button onclick="recover(true)" class="secondary">隔离已勾选来源后重算</button>
+      <button onclick="exportObject()">导出已提交对象</button>
+    </div>
+    <div id="sources"><strong>来源：</strong>${sources.map(s=>`<label><input type="checkbox" value="${esc(s)}">${esc(s)}</label>`).join('')}</div>
+    <h3>Stripe 健康度</h3><div class="scroll"><table><thead><tr><th>#</th><th>长度</th><th>状态</th><th>可行答案</th><th>期望摘要</th></tr></thead><tbody>
+    ${stateData.selected.stripes.map(s=>`<tr><td>${s.index}</td><td>${s.data_len}</td><td>${pill(s.status)}</td><td>${s.valid_answers}</td><td class="mono">${esc(s.expected_digest.slice(0,18))}</td></tr>`).join('')}
+    </tbody></table></div>
+    <h3>Shard / 原始碎片</h3><div class="scroll"><table><thead><tr><th>Stripe</th><th>Shard</th><th>来源</th><th>长度</th><th>健康</th><th>证据 / 路径</th></tr></thead><tbody>
+    ${stateData.selected.fragments.map(f=>`<tr><td>${f.stripe_index}</td><td>${f.shard_index ?? '-'}<br>g${f.shard_generation ?? '-'}</td><td>${esc(f.received_from)}</td><td>${f.byte_length}</td><td>${pill(f.health)}</td><td><div class="evidence">${esc(f.evidence)}\n${esc(f.raw_path)}</div><br><span class="mono">${esc(f.actual_sha256.slice(0,16))}</span></td></tr>`).join('')}
+    </tbody></table></div>`;
+  renderReconstructions();
+}
+function renderReconstructions(){
+  const rows = (stateData.selected?.reconstructions || []);
+  document.querySelector('#reconstructions tbody').innerHTML = rows.map(r=>`<tr>
+    <td>${r.run_id}<br>${r.valid ? pill('valid') : pill('invalid')}</td><td>${r.stripe_index}</td>
+    <td class="mono">${esc(r.combination_key)}</td>
+    <td><div class="evidence">${esc(JSON.stringify(r.participating,null,2))}</div></td>
+    <td><div class="evidence">${esc(JSON.stringify(r.excluded_evidence,null,2))}</div></td>
+    <td><div class="evidence">${esc(JSON.stringify(r.recomputed_digests,null,2))}</div></td>
+  </tr>`).join('');
+}
+function checkedSources(){ return [...document.querySelectorAll('#sources input:checked')].map(i=>i.value); }
+async function post(url, body){
+  const response = await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const data = await response.json();
+  if(!response.ok || data.ok===false) alert(data.error || '操作失败');
+  await load();
+}
+function recover(isolated){ post('/api/recover',{object_id:currentObject().object_id,generation:currentObject().generation,isolated_sources:isolated?checkedSources():[],budget:4096}); }
+function exportObject(){ post('/api/export',{object_id:currentObject().object_id,generation:currentObject().generation}); }
+load();
+</script>
+</body>
+</html>

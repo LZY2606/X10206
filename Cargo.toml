@@ -1,0 +1,24 @@
+[package]
+name = "stripes-recovery-pod"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "stripes_recovery_pod"
+path = "src/lib.rs"
+
+[[bin]]
+name = "stripes-recovery-pod"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+rusqlite = { version = "0.34", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+hex = "0.4"
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+tempfile = "3"
