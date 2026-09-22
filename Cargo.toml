@@ -1,0 +1,18 @@
+[package]
+name = "stripe-recovery-cabin"
+version = "0.1.0"
+edition = "2021"
+description = "Offline stripe recovery review cabin"
+
+[dependencies]
+axum = "0.8"
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "sync", "signal"] }
+tower = "0.5"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"
