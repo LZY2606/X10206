@@ -1,0 +1,28 @@
+[package]
+name = "stripe-recovery-chamber"
+version = "0.1.0"
+edition = "2021"
+description = "条带复原舱 — 离线对象碎片审阅与条带重建"
+
+[lib]
+name = "chamber"
+path = "src/lib.rs"
+
+[[bin]]
+name = "chamber"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["form"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+tower = "0.5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "ansi", "smallvec", "env-filter"] }
+
+[profile.dev]
+opt-level = 1
