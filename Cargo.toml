@@ -1,0 +1,24 @@
+[package]
+name = "stripe-recovery-pod"
+version = "0.1.0"
+edition = "2021"
+description = "条带复原舱 (Stripe Recovery Pod) - 离线对象碎片审阅与条带重建"
+
+[[bin]]
+name = "stripe-recovery-pod"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "set-header"] }
+once_cell = "1"
+
+[profile.dev]
+opt-level = 0
