@@ -1,0 +1,22 @@
+[package]
+name = "striperecovery"
+version = "0.1.0"
+edition = "2021"
+description = "条带复原舱 - 离线对象碎片审阅与条带重建"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.dev]
+opt-level = 1
